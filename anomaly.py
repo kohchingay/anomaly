@@ -17,7 +17,6 @@ def load_data():
 
 df = load_data()
 
-
 #Exploratory Data Analysis
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -82,53 +81,49 @@ if anomalous:
 else:
     st.success("✅ No anomalies detected in the entered exchange rates.")
 
+# Identifying Arbitrage: Step Two
+# Detect anomalies
+user_df = pd.DataFrame([user_input])
+anomalies = {cur: models[cur].predict(user_df[[cur]])[0] for cur in df.columns}
+anomalous = [cur for cur, pred in anomalies.items() if pred == -1]
+
+# Display anomaly result
+st.subheader("🔍 Anomaly Detection Result")
+if anomalous:
+    st.error(f"⚠️ Anomaly detected in: {', '.join(anomalous)}")
+else:
+    st.success("✅ No anomalies detected.")
+
+# If anomaly found, ask for pairwise exchange rates
+if anomalous:
+    st.sidebar.markdown("### 💱 Enter Pairwise Exchange Rates")
+    arb_input = {}
+    for base in anomalous:
+        others = [c for c in df.columns if c != base]
+        st.sidebar.markdown(f"**{base} vs others**")
+        for target in others:
+            key = f"{base}_{target}"
+            arb_input[key] = st.sidebar.number_input(f"{base} → {target}", min_value=0.0001, format="%.4f")
+
+    # Build arbitrage paths
+    st.subheader("💡 Arbitrage Opportunities")
+    for base in anomalous:
+        others = [c for c in df.columns if c != base]
+        for a in others:
+            for b in others:
+                if a != b and a != base and b != base:
+                    try:
+                        rate1 = arb_input[f"{base}_{a}"]
+                        rate2 = arb_input[f"{a}_{b}"]
+                        rate3 = arb_input[f"{b}_{base}"]
+                        product = rate1 * rate2 * rate3
+                        if product > 1.01:
+                            st.warning(f"Arbitrage path: {base} → {a} → {b} → {base} | Profit multiplier: {round(product, 4)}")
+                    except KeyError:
+                        continue
+
+
 # Optional: Show historical data
 with st.expander("📊 Show Historical Exchange Rates"):
     st.dataframe(df.describe().T)
 
-# Arbitrage Recommender
-import numpy as np
-
-# Build exchange rate matrix from user input
-rates = user_input
-currencies = list(rates.keys())
-
-# Create pairwise exchange rates
-exchange_matrix = pd.DataFrame(index=currencies, columns=currencies)
-for from_cur in currencies:
-    for to_cur in currencies:
-        if from_cur == to_cur:
-            exchange_matrix.loc[from_cur, to_cur] = 1.0
-        else:
-            exchange_matrix.loc[from_cur, to_cur] = rates[to_cur] / rates[from_cur]
-
-# Simulate triangular/quadrilateral loops
-def find_arbitrage_paths(matrix):
-    paths = []
-    for a in currencies:
-        for b in currencies:
-            for c in currencies:
-                for d in currencies:
-                    if len({a, b, c, d}) == 4:
-                        product = (
-                            matrix.loc[a, b] *
-                            matrix.loc[b, c] *
-                            matrix.loc[c, d] *
-                            matrix.loc[d, a]
-                        )
-                        if product > 1.01:  # Threshold for arbitrage
-                            paths.append((a, b, c, d, a, round(product, 4)))
-    return paths
-
-arbitrage_paths = find_arbitrage_paths(exchange_matrix)
-
-# Display arbitrage suggestions
-st.subheader("💡 Arbitrage Opportunities")
-if anomalous and arbitrage_paths:
-    st.warning("Anomalies detected. Potential arbitrage paths:")
-    for path in arbitrage_paths:
-        st.write(f"→ {' → '.join(path[:-1])} | Profit multiplier: {path[-1]}")
-elif anomalous:
-    st.info("Anomalies detected, but no arbitrage paths found.")
-else:
-    st.success("No anomalies or arbitrage opportunities detected.")
