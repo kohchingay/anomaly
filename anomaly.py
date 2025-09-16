@@ -12,9 +12,11 @@ def load_data():
     df.columns = ["EUR", "GBP", "USD", "MYR"]
     df = df.dropna()
     df = df[df.applymap(lambda x: isinstance(x, (int, float)))]
+    df.index = pd.RangeIndex(start=0, stop=len(df), step=1)
     return df
 
 df = load_data()
+
 
 #Exploratory Data Analysis
 import seaborn as sns
