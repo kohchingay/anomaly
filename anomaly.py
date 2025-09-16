@@ -16,6 +16,38 @@ def load_data():
 
 df = load_data()
 
+#Exploratory Data Analysis
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+st.header("📈 Exploratory Data Analysis")
+
+# Summary statistics
+st.subheader("Descriptive Statistics")
+st.dataframe(df.describe().T)
+
+# Line chart
+st.subheader("Historical Exchange Rate Trends")
+selected_currencies = st.multiselect("Select currencies to plot", df.columns.tolist(), default=df.columns.tolist())
+st.line_chart(df[selected_currencies])
+
+# Correlation matrix
+st.subheader("Currency Correlation Matrix")
+corr = df.corr()
+sns.set(style="white")
+fig, ax = plt.subplots()
+sns.heatmap(corr, annot=True, cmap="coolwarm", ax=ax)
+st.pyplot(fig)
+
+# Boxplots
+st.subheader("Distribution & Outliers")
+for currency in df.columns:
+    fig, ax = plt.subplots()
+    sns.boxplot(data=df, x=currency, ax=ax)
+    ax.set_title(f"{currency} Distribution")
+    st.pyplot(fig)
+
+
 # Train models
 @st.cache_resource
 def train_models(df):
