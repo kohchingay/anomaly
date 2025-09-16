@@ -2,4 +2,6 @@
 scikit-learn
 matplotlib
 openpyxl
+
 streamlit
+seaborn
