@@ -65,7 +65,9 @@ def train_models(df):
 
 models = train_models(df)
 
-# Function to get current exchange rates (SGD as base)
+# Hardcoded fallback rates
+FALLBACK_RATES = {"EUR": 1.51, "GBP": 1.75, "USD": 1.36, "SGD": 1.00}
+
 def get_current_exchange_rates():
     url = "https://api.exchangerate.host/latest?base=SGD"
     try:
@@ -73,28 +75,30 @@ def get_current_exchange_rates():
         response.raise_for_status()
         data = response.json()
         return {
-            "EUR": round(float(data["rates"]["EUR"]), 4),
-            "GBP": round(float(data["rates"]["GBP"]), 4),
-            "USD": round(float(data["rates"]["USD"]), 4),
-            "SGD": 1.0000
+            "EUR": float(data["rates"].get("EUR", FALLBACK_RATES["EUR"])),
+            "GBP": float(data["rates"].get("GBP", FALLBACK_RATES["GBP"])),
+            "USD": float(data["rates"].get("USD", FALLBACK_RATES["USD"])),
+            "SGD": 1.0
         }
     except Exception:
-        # fallback if API fails
-        return {"EUR": 1.51, "GBP": 1.75, "USD": 1.36, "SGD": 1.00}
+        return FALLBACK_RATES.copy()
 
-# Only fetch once per run, not with caching decorators
-default_rates = get_current_exchange_rates()
+# Only fetch rates once per session
+if "default_rates" not in st.session_state:
+    st.session_state["default_rates"] = get_current_exchange_rates()
+
+default_rates = st.session_state["default_rates"]
 
 # 📥 Sidebar inputs with live defaults
 st.sidebar.header("📥 Enter Today's Exchange Rates")
 user_input = {}
-for currency in df.columns:
-    # Ensure a valid float is always provided as value
+for currency in ["EUR", "GBP", "USD", "SGD"]:  # use df.columns if appropriate
+    default_value = float(default_rates.get(currency, FALLBACK_RATES[currency]))
     user_input[currency] = st.sidebar.number_input(
-        f"{currency}", 
-        min_value=0.0, 
-        format="%.4f", 
-        value=float(default_rates.get(currency, 1.0 if currency == "SGD" else 0.0))
+        f"{currency}",
+        min_value=0.0,
+        format="%.4f",
+        value=default_value
     )
 
 # 🔍 Predict anomalies
