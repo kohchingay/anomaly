@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.ensemble import IsolationForest
 import seaborn as sns
 import matplotlib.pyplot as plt
+import requests
 
 # Title
 st.title("💱 Exchange Rate Anomaly Detector")
@@ -63,8 +64,6 @@ def train_models(df):
     return models
 
 models = train_models(df)
-
-import requests
 
 # Function to get current exchange rates (SGD as base)
 def get_current_exchange_rates():
