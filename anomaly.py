@@ -106,9 +106,6 @@ for currency in ["EUR", "GBP", "USD", "SGD"]:
         key=f"input_{currency}"
     )
 
-st.write("Session default_rates:", default_rates)  # Diagnostic
-st.write("User input:", user_input)                # Diagnostic
-
 # 🔍 Predict anomalies
 user_df = pd.DataFrame([user_input])
 anomalies = {cur: models[cur].predict(user_df[[cur]])[0] for cur in df.columns}
