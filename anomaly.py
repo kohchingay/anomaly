@@ -68,36 +68,33 @@ models = train_models(df)
 # Function to get current exchange rates (SGD as base)
 def get_current_exchange_rates():
     url = "https://api.exchangerate.host/latest?base=SGD"
-    response = requests.get(url)
-    data = response.json()
-    # Map to your columns
-    return {
-        "EUR": round(data["rates"]["EUR"], 4),
-        "GBP": round(data["rates"]["GBP"], 4),
-        "USD": round(data["rates"]["USD"], 4),
-        "SGD": 1.0000  # base currency
-    }
-
-# Fetch default rates once (cache to avoid repeated API calls)
-@st.cache_data
-def fetch_default_rates():
     try:
-        return get_current_exchange_rates()
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        return {
+            "EUR": round(float(data["rates"]["EUR"]), 4),
+            "GBP": round(float(data["rates"]["GBP"]), 4),
+            "USD": round(float(data["rates"]["USD"]), 4),
+            "SGD": 1.0000
+        }
     except Exception:
         # fallback if API fails
         return {"EUR": 1.51, "GBP": 1.75, "USD": 1.36, "SGD": 1.00}
 
-default_rates = fetch_default_rates()
+# Only fetch once per run, not with caching decorators
+default_rates = get_current_exchange_rates()
 
 # 📥 Sidebar inputs with live defaults
 st.sidebar.header("📥 Enter Today's Exchange Rates")
 user_input = {}
 for currency in df.columns:
+    # Ensure a valid float is always provided as value
     user_input[currency] = st.sidebar.number_input(
         f"{currency}", 
         min_value=0.0, 
         format="%.4f", 
-        value=default_rates.get(currency, 0.0)
+        value=float(default_rates.get(currency, 1.0 if currency == "SGD" else 0.0))
     )
 
 # 🔍 Predict anomalies
