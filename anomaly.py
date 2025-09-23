@@ -65,7 +65,6 @@ def train_models(df):
 
 models = train_models(df)
 
-# Hardcoded fallback rates
 FALLBACK_RATES = {"EUR": 1.51, "GBP": 1.75, "USD": 1.36, "SGD": 1.00}
 
 def get_current_exchange_rates():
@@ -83,7 +82,7 @@ def get_current_exchange_rates():
     except Exception:
         return FALLBACK_RATES.copy()
 
-# Only fetch rates once per session
+# Only fetch rates ONCE per session.
 if "default_rates" not in st.session_state:
     st.session_state["default_rates"] = get_current_exchange_rates()
 
@@ -92,13 +91,14 @@ default_rates = st.session_state["default_rates"]
 # 📥 Sidebar inputs with live defaults
 st.sidebar.header("📥 Enter Today's Exchange Rates")
 user_input = {}
-for currency in ["EUR", "GBP", "USD", "SGD"]:  # use df.columns if appropriate
-    default_value = float(default_rates.get(currency, FALLBACK_RATES[currency]))
+for currency in ["EUR", "GBP", "USD", "SGD"]:
+    # Use a unique key for each widget, and don't ever change the default value for a given key in a session
     user_input[currency] = st.sidebar.number_input(
         f"{currency}",
         min_value=0.0,
         format="%.4f",
-        value=default_value
+        value=float(default_rates[currency]),
+        key=f"input_{currency}"
     )
 
 # 🔍 Predict anomalies
