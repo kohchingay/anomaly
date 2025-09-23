@@ -83,23 +83,31 @@ def get_current_exchange_rates():
         return FALLBACK_RATES.copy()
 
 # Only fetch rates ONCE per session.
-if "default_rates" not in st.session_state:
+if "default_rates" not in st.session_state or not isinstance(st.session_state["default_rates"], dict):
     st.session_state["default_rates"] = get_current_exchange_rates()
 
 default_rates = st.session_state["default_rates"]
+
+# Defensive: ensure all needed keys exist
+for k in ["EUR", "GBP", "USD", "SGD"]:
+    if k not in default_rates:
+        default_rates[k] = FALLBACK_RATES[k]
 
 # 📥 Sidebar inputs with live defaults
 st.sidebar.header("📥 Enter Today's Exchange Rates")
 user_input = {}
 for currency in ["EUR", "GBP", "USD", "SGD"]:
-    # Use a unique key for each widget, and don't ever change the default value for a given key in a session
+    default_val = float(default_rates.get(currency, FALLBACK_RATES[currency]))
     user_input[currency] = st.sidebar.number_input(
         f"{currency}",
         min_value=0.0,
         format="%.4f",
-        value=float(default_rates[currency]),
+        value=default_val,
         key=f"input_{currency}"
     )
+
+st.write("Session default_rates:", default_rates)  # Diagnostic
+st.write("User input:", user_input)   
 
 # 🔍 Predict anomalies
 user_df = pd.DataFrame([user_input])
