@@ -107,7 +107,7 @@ for currency in ["EUR", "GBP", "USD", "SGD"]:
     )
 
 st.write("Session default_rates:", default_rates)  # Diagnostic
-st.write("User input:", user_input)   
+st.write("User input:", user_input)                # Diagnostic
 
 # 🔍 Predict anomalies
 user_df = pd.DataFrame([user_input])
