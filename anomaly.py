@@ -11,13 +11,33 @@ st.title("💱 Exchange Rate Anomaly Detector")
 # Load and clean data
 @st.cache_data
 def load_data():
-    df = pd.read_excel("Exchange Rates 2017 to 2025.xlsx", usecols="C:F")  # Assuming column C has the date
-    df.columns = ["Date", "EUR", "GBP", "USD"]
+    # Read relevant rows and columns
+    df = pd.read_excel(
+        "Exchange Rates 2017 to 2025.xlsx",
+        usecols="A:B,D:F",   # Year, Month, EUR, GBP, USD
+        skiprows=8,          # Skip to row 9 (0-indexed)
+        nrows=2056           # Total rows to read (2064 - 8)
+    )
+    df.columns = ["Year", "Month", "EUR", "GBP", "USD"]
+
+    # Drop rows with any missing values
     df = df.dropna()
+
+    # Convert to proper numeric types
     df = df[df[["EUR", "GBP", "USD"]].applymap(lambda x: isinstance(x, (int, float)))]
-    df["Date"] = pd.to_datetime(df["Date"])
+
+    # Construct datetime from Year and Month
+    df["Date"] = pd.to_datetime(df["Year"].astype(str) + "-" + df["Month"].astype(str), format="%Y-%B")
+
+    # Set datetime as index
     df.set_index("Date", inplace=True)
-    df["SGD"] = 1.0  # Add synthetic SGD column
+
+    # Optional: drop Year and Month columns
+    df.drop(columns=["Year", "Month"], inplace=True)
+
+    # Add synthetic SGD column
+    df["SGD"] = 1.0
+
     return df
 
 df = load_data()
@@ -31,8 +51,13 @@ st.dataframe(df[["EUR", "GBP", "USD"]].describe().T)
 
 # Line chart
 st.subheader("Historical Exchange Rate Trends")
-selected_currencies = st.multiselect("Select currencies to plot", df.columns.tolist(), default=df.columns.tolist())
+selected_currencies = st.multiselect(
+    "Select currencies to plot",
+    df.columns.tolist(),
+    default=df.columns.tolist()
+)
 st.line_chart(df[selected_currencies])
+
 
 
 # Correlation matrix
