@@ -11,22 +11,12 @@ st.title("💱 Exchange Rate Anomaly Detector")
 # Load and clean data
 @st.cache_data
 def load_data():
-    # Read specific rows and columns (rows 9 to 2064 = skip 8, then 2056 rows)
-    df = pd.read_excel(
-        "Exchange Rates 2017 to 2025.xlsx",
-        usecols="A,D:F",       # Year, EUR, GBP, USD
-        skiprows=8,
-        nrows=2056
-    )
-    df.columns = ["Year", "EUR", "GBP", "USD"]
-
-    # Drop rows with missing or non-numeric data
+    df = pd.read_excel("Exchange Rates 2017 to 2025.xlsx", usecols="D:F")
+    df.columns = ["EUR", "GBP", "USD"]
     df = df.dropna()
-    df = df[df[["EUR", "GBP", "USD"]].applymap(lambda x: isinstance(x, (int, float)))]
-
-    # Add synthetic SGD column
-    df["SGD"] = 1.0
-
+    df = df[df.applymap(lambda x: isinstance(x, (int, float)))]
+    df["SGD"] = 1.0  # Add synthetic SGD column
+    df.index = pd.RangeIndex(start=0, stop=len(df), step=1)
     return df
 
 df = load_data()
@@ -34,25 +24,14 @@ df = load_data()
 # 📈 Exploratory Data Analysis
 st.header("📈 Exploratory Data Analysis")
 
-# Descriptive Statistics
+# Summary statistics for EUR, GBP, USD only
 st.subheader("Descriptive Statistics")
 st.dataframe(df[["EUR", "GBP", "USD"]].describe().T)
 
-# 📉 Line Chart by Year
+# Line chart
 st.subheader("Historical Exchange Rate Trends")
-
-# Group by Year and take the average (if multiple entries per year)
-df_grouped = df.groupby("Year").mean(numeric_only=True)
-
-selected_currencies = st.multiselect(
-    "Select currencies to plot",
-    df_grouped.columns.tolist(),
-    default=df_grouped.columns.tolist()
-)
-
-# Line chart (X-axis will be Year, Y-axis exchange rates)
-st.line_chart(df_grouped[selected_currencies])
-
+selected_currencies = st.multiselect("Select currencies to plot", df.columns.tolist(), default=df.columns.tolist())
+st.line_chart(df[selected_currencies])
 
 # Correlation matrix
 st.subheader("Currency Correlation Matrix")
