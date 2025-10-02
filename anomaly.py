@@ -1,5 +1,9 @@
 import streamlit as st
 import pandas as pd
+from sklearn.ensemble import IsolationForest
+import seaborn as sns
+import matplotlib.pyplot as plt
+import requests
 
 # Title
 st.title("💱 Exchange Rate Anomaly Detector")
