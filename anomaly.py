@@ -1,9 +1,5 @@
 import streamlit as st
 import pandas as pd
-from sklearn.ensemble import IsolationForest
-import seaborn as sns
-import matplotlib.pyplot as plt
-import requests
 
 # Title
 st.title("💱 Exchange Rate Anomaly Detector")
@@ -11,29 +7,18 @@ st.title("💱 Exchange Rate Anomaly Detector")
 # Load and clean data
 @st.cache_data
 def load_data():
-    # Read relevant rows and columns
+    # Read specific rows and columns (rows 9 to 2064 = skip 8, then 2056 rows)
     df = pd.read_excel(
         "Exchange Rates 2017 to 2025.xlsx",
-        usecols="A:B,D:F",   # Year, Month, EUR, GBP, USD
-        skiprows=8,          # Skip to row 9 (0-indexed)
-        nrows=2056           # Total rows to read (2064 - 8)
+        usecols="A,D:F",       # Year, EUR, GBP, USD
+        skiprows=8,
+        nrows=2056
     )
-    df.columns = ["Year", "Month", "EUR", "GBP", "USD"]
+    df.columns = ["Year", "EUR", "GBP", "USD"]
 
-    # Drop rows with any missing values
+    # Drop rows with missing or non-numeric data
     df = df.dropna()
-
-    # Convert to proper numeric types
     df = df[df[["EUR", "GBP", "USD"]].applymap(lambda x: isinstance(x, (int, float)))]
-
-    # Construct datetime from Year and Month
-    df["Date"] = pd.to_datetime(df["Year"].astype(str) + "-" + df["Month"].astype(str), format="%Y-%B")
-
-    # Set datetime as index
-    df.set_index("Date", inplace=True)
-
-    # Optional: drop Year and Month columns
-    df.drop(columns=["Year", "Month"], inplace=True)
 
     # Add synthetic SGD column
     df["SGD"] = 1.0
@@ -45,19 +30,24 @@ df = load_data()
 # 📈 Exploratory Data Analysis
 st.header("📈 Exploratory Data Analysis")
 
-# Summary statistics for EUR, GBP, USD only
+# Descriptive Statistics
 st.subheader("Descriptive Statistics")
 st.dataframe(df[["EUR", "GBP", "USD"]].describe().T)
 
-# Line chart
+# 📉 Line Chart by Year
 st.subheader("Historical Exchange Rate Trends")
+
+# Group by Year and take the average (if multiple entries per year)
+df_grouped = df.groupby("Year").mean(numeric_only=True)
+
 selected_currencies = st.multiselect(
     "Select currencies to plot",
-    df.columns.tolist(),
-    default=df.columns.tolist()
+    df_grouped.columns.tolist(),
+    default=df_grouped.columns.tolist()
 )
-st.line_chart(df[selected_currencies])
 
+# Line chart (X-axis will be Year, Y-axis exchange rates)
+st.line_chart(df_grouped[selected_currencies])
 
 
 # Correlation matrix
