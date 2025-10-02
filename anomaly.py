@@ -5,25 +5,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import requests
 
-# Custom Styling for Professional Look
-st.markdown("""
-    <style>
-    .main { 
-        padding: 5% 5% 5% 5%; 
-        background-color: #f0f4f8; 
-        border-radius: 8px;
-    }
-    .sidebar .sidebar-content { 
-        background-color: #1f3c5f;
-        color: white;
-        border-radius: 10px;
-    }
-    .css-1d391kg {
-        background-color: #005b87;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # Title
 st.title("💱 Exchange Rate Anomaly Detector")
 
@@ -43,7 +24,7 @@ df = load_data()
 # 📈 Exploratory Data Analysis
 st.header("📈 Exploratory Data Analysis")
 
-# Descriptive Statistics
+# Summary statistics for EUR, GBP, USD only
 st.subheader("Descriptive Statistics")
 st.dataframe(df[["EUR", "GBP", "USD"]].describe().T)
 
@@ -55,18 +36,21 @@ st.line_chart(df[selected_currencies])
 # Correlation matrix
 st.subheader("Currency Correlation Matrix")
 corr = df.corr()
-sns.set(style="whitegrid")
-fig, ax = plt.subplots(figsize=(8, 6))
+sns.set(style="white")
+fig, ax = plt.subplots()
 sns.heatmap(corr, annot=True, cmap="coolwarm", ax=ax)
 st.pyplot(fig)
 
-# Boxplots
+# Boxplots (smaller, side-by-side, excluding SGD)
 st.subheader("Distribution & Outliers")
+
 cols_to_plot = ["EUR", "GBP", "USD"]
-fig, axes = plt.subplots(1, len(cols_to_plot), figsize=(12, 4))
+fig, axes = plt.subplots(1, len(cols_to_plot), figsize=(12, 3))
+
 for i, currency in enumerate(cols_to_plot):
-    sns.boxplot(data=df, x=currency, ax=axes[i], palette="coolwarm")
+    sns.boxplot(data=df, x=currency, ax=axes[i])
     axes[i].set_title(f"{currency} Distribution")
+
 st.pyplot(fig)
 
 # 🧠 Train models
@@ -98,13 +82,18 @@ def get_current_exchange_rates():
     except Exception:
         return FALLBACK_RATES.copy()
 
-# Store the fetched rates in session state
+# Only fetch rates ONCE per session.
 if "default_rates" not in st.session_state or not isinstance(st.session_state["default_rates"], dict):
     st.session_state["default_rates"] = get_current_exchange_rates()
 
 default_rates = st.session_state["default_rates"]
 
-# Sidebar inputs with live defaults
+# Defensive: ensure all needed keys exist
+for k in ["EUR", "GBP", "USD", "SGD"]:
+    if k not in default_rates:
+        default_rates[k] = FALLBACK_RATES[k]
+
+# 📥 Sidebar inputs with live defaults
 st.sidebar.header("📥 Enter Today's Exchange Rates")
 user_input = {}
 for currency in ["EUR", "GBP", "USD", "SGD"]:
@@ -114,44 +103,90 @@ for currency in ["EUR", "GBP", "USD", "SGD"]:
         min_value=0.0,
         format="%.4f",
         value=default_val,
-        key=f"input_{currency}",
-        help=f"Enter the exchange rate for {currency} in SGD."
+        key=f"input_{currency}"
     )
 
 # 🔍 Predict anomalies
 user_df = pd.DataFrame([user_input])
-anomalies = {cur: models[cur].predict(user_df[[cur]])[0] for cur in df.columns}
+# Predict anomalies and get confidence scores (the further from 0, the higher the confidence)
+anomalies = {}
+confidence_scores = {}
+for cur in df.columns:
+    pred = models[cur].predict(user_df[[cur]])[0]
+    score = models[cur].decision_function(user_df[[cur]])[0]  # Higher = more normal, Lower = more anomalous
+    anomalies[cur] = pred
+    confidence_scores[cur] = score
+
 anomalous = [cur for cur, pred in anomalies.items() if pred == -1]
 
-# Display anomaly result
-st.subheader("🔍 Anomaly Detection Result")
+# Display anomaly result with model accuracy percentage for flagged currencies
+st.subheader("🔍 Anomaly Detection Result & Model Accuracy")
+
 if anomalous:
-    st.error(f"⚠️ Anomaly detected in: {', '.join(anomalous)}")
     for cur in anomalous:
-        st.write(f"- {cur}: {user_input[cur]}")
+        # Predict on training data
+        train_preds = models[cur].predict(df[[cur]])
+        # IsolationForest predicts 1 for normal, -1 for anomaly
+        accuracy = (train_preds == 1).sum() / len(train_preds) * 100
+        st.error(f"⚠️ {cur}: Anomaly detected at {user_input[cur]} (Model accuracy: {accuracy:.1f}%)")
 else:
     st.success("✅ No anomalies detected in the entered exchange rates.")
 
 # 💱 Arbitrage logic: dynamic and robust
 if anomalous:
     st.sidebar.markdown("### 💱 Enter Pairwise Exchange Rates")
+
+    # Prepare a dictionary of all current exchange rates for autofill
+    pairwise_defaults = {}
+    for c1 in df.columns:
+        for c2 in df.columns:
+            if c1 == c2:
+                continue
+            # Compute the default rate from current exchange rates if possible
+            # c1 to c2: rate_c2/rate_c1
+            try:
+                pairwise_defaults[f"{c1}_{c2}"] = float(default_rates[c2]) / float(default_rates[c1])
+            except Exception:
+                pairwise_defaults[f"{c1}_{c2}"] = 1.0
+
     for base in anomalous:
         st.sidebar.markdown(f"**Exchange rates for {base}**")
         others = [c for c in df.columns if c != base]
         arb_input = {}
 
-        # Collect pairwise rates for base and others
+        # Collect all pairwise rates involving base and others, with smart default values
         for a in others:
-            arb_input[f"{base}_{a}"] = st.sidebar.number_input(f"{base} → {a}", min_value=0.0001, format="%.4f")
-            arb_input[f"{a}_{base}"] = st.sidebar.number_input(f"{a} → {base}", min_value=0.0001, format="%.4f")
+            key1 = f"{base}_{a}"
+            key2 = f"{a}_{base}"
+            arb_input[key1] = st.sidebar.number_input(
+                f"{base} → {a}",
+                min_value=0.0001,
+                format="%.4f",
+                value=pairwise_defaults.get(key1, 1.0),
+                key=f"arb_{key1}"
+            )
+            arb_input[key2] = st.sidebar.number_input(
+                f"{a} → {base}",
+                min_value=0.0001,
+                format="%.4f",
+                value=pairwise_defaults.get(key2, 1.0),
+                key=f"arb_{key2}"
+            )
 
-        # Collect rates between others
+        # Also collect rates between others (non-base), with smart default values
         for i in range(len(others)):
             for j in range(len(others)):
                 if i != j:
-                    arb_input[f"{others[i]}_{others[j]}"] = st.sidebar.number_input(f"{others[i]} → {others[j]}", min_value=0.0001, format="%.4f")
+                    key = f"{others[i]}_{others[j]}"
+                    arb_input[key] = st.sidebar.number_input(
+                        f"{others[i]} → {others[j]}",
+                        min_value=0.0001,
+                        format="%.4f",
+                        value=pairwise_defaults.get(key, 1.0),
+                        key=f"arb_{key}"
+                    )
 
-        # Arbitrage Opportunities
+        # Generate all valid 3-step loops: base → A → B → base
         st.subheader(f"💡 Arbitrage Opportunities for {base}")
         best_path = None
         best_profit = 1.0
@@ -170,7 +205,7 @@ if anomalous:
                                 best_profit = product
                                 best_path = (base, a, b, base)
                     except KeyError:
-                        continue
+                        continue  # Skip incomplete paths
 
         if best_path:
             st.success(f"✅ Recommended arbitrage path: {' → '.join(best_path)} | Profit multiplier: {round(best_profit, 4)}")
